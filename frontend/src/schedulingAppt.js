@@ -273,39 +273,112 @@ export class SchedulingAppt extends Component {
         <Box align="center" pad="small" gap="small">
           <Form
             onSubmit={({ value }) => {
-              //probably fetch uid here, add one
+
+              if (!theDoc || !theDate || !theTime || !theConcerns || !theSymptoms) {
+                window.alert("Please fill in all required fields");
+                return;
+              }
+          
+              // Get user session
               fetch("http://localhost:3001/userInSession")
                 .then(res => res.json())
                 .then(res => {
-                  var string_json = JSON.stringify(res);
-                  var email_json = JSON.parse(string_json);
-                  let email_in_use = email_json.email;
-                  fetch("http://localhost:3001/checkIfApptExists?email=" + email_in_use + "&startTime=" + theTime + "&date=" + theDate + "&docEmail=" + theDoc)
+                  const email_in_use = res.email;
+                  
+                  // Format date
+                  const formattedDate = new Date(theDate).toLocaleDateString();
+          
+                  console.log("Scheduling appointment with:", {
+                    email: email_in_use,
+                    doctor: theDoc,
+                    date: formattedDate,
+                    time: theTime
+                  });
+          
+                  // Check conflicts
+                  fetch(`http://localhost:3001/checkIfApptExists?email=${encodeURIComponent(email_in_use)}&startTime=${encodeURIComponent(theTime)}&date=${encodeURIComponent(formattedDate)}&docEmail=${encodeURIComponent(theDoc)}`)
                     .then(res => res.json())
                     .then(res => {
-                      if ((res.data[0])) {
+                      if (res.hasConflict) {
                         window.alert("Appointment Clash! Try another doctor or date/time");
-                      } else {
-                        fetch("http://localhost:3001/genApptUID")
-                          .then(res => res.json())
-                          .then(res => {
-                            var string_json = JSON.stringify(res);
-                            var uid_json = JSON.parse(string_json);
-                            let gen_uid = uid_json.id;
-                            console.log(gen_uid);
-                            fetch("http://localhost:3001/schedule?time=" + theTime + "&endTime=" + endTime +
-                              "&date=" + theDate + "&concerns=" + theConcerns + "&symptoms=" + theSymptoms + 
-                              "&id=" + gen_uid + "&doc=" + theDoc).then((x)=>{
-                              fetch("http://localhost:3001/addToPatientSeeAppt?email=" + email_in_use + "&id=" + gen_uid +
-                                "&concerns=" + theConcerns + "&symptoms=" + theSymptoms).then((x)=>{
+                        return;
+                      }
+          
+                      // Generate appointment ID
+                      fetch("http://localhost:3001/genApptUID")
+                        .then(res => res.json())
+                        .then(res => {
+                          const gen_uid = res.id;
+          
+                          // Schedule appointment
+                          fetch(`http://localhost:3001/schedule?time=${encodeURIComponent(theTime)}&endTime=${encodeURIComponent(endTime)}&date=${encodeURIComponent(formattedDate)}&id=${gen_uid}&doc=${encodeURIComponent(theDoc)}`)
+                            .then(res => res.json())
+                            .then(() => {
+                              // Add patient to appointment
+                              fetch(`http://localhost:3001/addToPatientSeeAppt?email=${encodeURIComponent(email_in_use)}&id=${gen_uid}&concerns=${encodeURIComponent(theConcerns)}&symptoms=${encodeURIComponent(theSymptoms)}`)
+                                .then(() => {
                                   window.alert("Appointment successfully scheduled!");
+                                  window.location.href = '/Home';
+                                })
+                                .catch(err => {
+                                  console.error("Error adding patient to appointment:", err);
+                                  window.alert("Error scheduling appointment");
                                 });
                             })
-                          });
-                      }
+                            .catch(err => {
+                              console.error("Error scheduling appointment:", err);
+                              window.alert("Error scheduling appointment");
+                            });
+                        })
+                        .catch(err => {
+                          console.error("Error generating appointment ID:", err);
+                          window.alert("Error scheduling appointment");
+                        });
+                    })
+                    .catch(err => {
+                      console.error("Error checking conflicts:", err);
+                      window.alert("Error checking appointment availability");
                     });
+                })
+                .catch(err => {
+                  console.error("Error getting user session:", err);
+                  window.alert("Error getting user session");
                 });
             }}
+
+              //probably fetch uid here, add one
+            //   fetch("http://localhost:3001/userInSession")
+            //     .then(res => res.json())
+            //     .then(res => {
+            //       var string_json = JSON.stringify(res);
+            //       var email_json = JSON.parse(string_json);
+            //       let email_in_use = email_json.email;
+            //       fetch("http://localhost:3001/checkIfApptExists?email=" + email_in_use + "&startTime=" + theTime + "&date=" + theDate + "&docEmail=" + theDoc)
+            //         .then(res => res.json())
+            //         .then(res => {
+            //           if ((res.data[0])) {
+            //             window.alert("Appointment Clash! Try another doctor or date/time");
+            //           } else {
+            //             fetch("http://localhost:3001/genApptUID")
+            //               .then(res => res.json())
+            //               .then(res => {
+            //                 var string_json = JSON.stringify(res);
+            //                 var uid_json = JSON.parse(string_json);
+            //                 let gen_uid = uid_json.id;
+            //                 console.log(gen_uid);
+            //                 fetch("http://localhost:3001/schedule?time=" + theTime + "&endTime=" + endTime +
+            //                   "&date=" + theDate + "&concerns=" + theConcerns + "&symptoms=" + theSymptoms + 
+            //                   "&id=" + gen_uid + "&doc=" + theDoc).then((x)=>{
+            //                   fetch("http://localhost:3001/addToPatientSeeAppt?email=" + email_in_use + "&id=" + gen_uid +
+            //                     "&concerns=" + theConcerns + "&symptoms=" + theSymptoms).then((x)=>{
+            //                       window.alert("Appointment successfully scheduled!");
+            //                     });
+            //                 })
+            //               });
+            //           }
+            //         });
+            //     });
+            // }}
           >
             <Box align="center" gap="small">
               <DoctorsDropdown />
